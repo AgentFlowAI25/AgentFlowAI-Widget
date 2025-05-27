@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AgentFlowAI Support Widget</title>
+
+  <!-- Chat Widget Style -->
+  <link rel="stylesheet" href="widget.css" />
+</head>
+<body>
+  <!-- Chat Widget Container -->
+  <div class="chat-widget-container">
+    <button class="chat-button" id="chatButton" aria-label="Chat öffnen" aria-expanded="false">
+      💬
+      <span class="unread-badge" id="unreadBadge">0</span>
+    </button>
+
+    <div class="chat-widget" id="chatWidget" role="dialog" aria-labelledby="chatHeader" aria-hidden="true">
+      <div class="chat-header" id="chatHeader">
+        <span>Kundensupport</span>
+        <button class="chat-close" id="chatClose" aria-label="Chat schließen">×</button>
+      </div>
+
+      <div class="chat-log" id="chatLog" role="log" aria-live="polite"></div>
+
+      <div class="typing-indicator" id="typingIndicator">
+        <span style="margin-right: 8px; font-size: 12px; color: #6c757d;">Bot tippt</span>
+        <div class="typing-dots">
+          <div class="typing-dot"></div>
+          <div class="typing-dot"></div>
+          <div class="typing-dot"></div>
+        </div>
+      </div>
+
+      <div class="chat-input-container">
+        <textarea class="chat-input" id="chatInput" placeholder="Ihre Nachricht..." rows="1" aria-label="Nachricht eingeben"></textarea>
+        <div class="error-message" id="errorMessage"></div>
+        <div class="privacy-notice">
+          Mit dem Absenden akzeptieren Sie unsere
+          <a href="/datenschutz" target="_blank" rel="noopener">Datenschutzerklärung</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chat Widget Script -->
+  <script src="widget.js" defer></script>
+</body>
+</html>
