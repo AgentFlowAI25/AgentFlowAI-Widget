@@ -1,4 +1,6 @@
+@@ -0,0 +1,274 @@
 // widget.js
+
 class ChatWidget {
     constructor(config = {}) {
         this.config = {
@@ -37,9 +39,11 @@ class ChatWidget {
         this.chatClose.addEventListener('click', () => this.closeChat());
         this.chatInput.addEventListener('keydown', (e) => this.handleInputKeydown(e));
         this.chatInput.addEventListener('input', () => this.adjustInputHeight());
+
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape' && this.isOpen) this.closeChat();
         });
+
         document.addEventListener('click', (e) => {
             if (this.isOpen && !this.chatWidget.contains(e.target) && !this.chatButton.contains(e.target)) {
                 this.closeChat();
@@ -56,28 +60,32 @@ class ChatWidget {
     }
 
     getOrCreateSessionId() {
-        let sessionId = sessionStorage.getItem('chatSessionId');
-        if (!sessionId) {
-            sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-            sessionStorage.setItem('chatSessionId', sessionId);
+        const key = 'chatSessionId';
+        let id = sessionStorage.getItem(key);
+        if (!id) {
+            id = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            sessionStorage.setItem(key, id);
         }
-        return sessionId;
+        return id;
     }
 
     loadMessages() {
         try {
             const stored = sessionStorage.getItem('chatMessages');
             return stored ? JSON.parse(stored) : [];
-        } catch {
+        } catch (e) {
+            console.warn('Chat message loading failed:', e);
             return [];
         }
     }
 
     saveMessages() {
         try {
-            const msgs = this.messages.slice(-this.config.maxMessages);
-            sessionStorage.setItem('chatMessages', JSON.stringify(msgs));
-        } catch {}
+            const recent = this.messages.slice(-this.config.maxMessages);
+            sessionStorage.setItem('chatMessages', JSON.stringify(recent));
+        } catch (e) {
+            console.warn('Chat message saving failed:', e);
+        }
     }
 
     toggleChat() {
@@ -102,9 +110,9 @@ class ChatWidget {
         this.chatWidget.setAttribute('aria-hidden', 'true');
     }
 
-    async handleInputKeydown(event) {
-        if (event.key === 'Enter' && !event.shiftKey) {
-            event.preventDefault();
+    async handleInputKeydown(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
             await this.sendMessage();
         }
     }
@@ -116,8 +124,8 @@ class ChatWidget {
     }
 
     async sendMessage() {
-        const message = this.chatInput.value.trim();
-        if (!message || this.isLoading) return;
+        const msg = this.chatInput.value.trim();
+        if (!msg || this.isLoading) return;
 
         const now = Date.now();
         if (now - this.lastMessageTime < this.config.rateLimitDelay) {
@@ -125,29 +133,26 @@ class ChatWidget {
             return;
         }
 
-        if (message.length > 1000) {
-            this.showError('Nachricht ist zu lang.');
+        if (msg.length > 1000) {
+            this.showError('Maximal 1000 Zeichen erlaubt.');
             return;
         }
 
         this.lastMessageTime = now;
         this.clearError();
-        this.addMessage('user', message);
+        this.addMessage('user', msg);
         this.chatInput.value = '';
         this.adjustInputHeight();
         this.showTyping();
 
         try {
-            const response = await this.callAPI(message);
+            const res = await this.callAPI(msg);
             this.hideTyping();
-            if (response && response.message) {
-                this.addMessage('bot', response.message);
-            } else {
-                this.addMessage('system', 'Keine Antwort vom Server.');
-            }
-        } catch {
+            this.addMessage('bot', res?.message || 'Keine Antwort erhalten.');
+        } catch (err) {
+            console.error('API Fehler:', err);
             this.hideTyping();
-            this.addMessage('system', 'Fehler bei der Verbindung.');
+            this.addMessage('system', 'Fehler beim Abrufen der Antwort.');
         }
     }
 
@@ -155,11 +160,12 @@ class ChatWidget {
         this.isLoading = true;
         this.chatInput.disabled = true;
         this.chatButton.classList.add('loading');
+
         try {
             const controller = new AbortController();
             const timeout = setTimeout(() => controller.abort(), 10000);
 
-            const response = await fetch(this.config.apiEndpoint, {
+            const res = await fetch(this.config.apiEndpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -169,9 +175,10 @@ class ChatWidget {
                 }),
                 signal: controller.signal
             });
+
             clearTimeout(timeout);
-            if (!response.ok) throw new Error();
-            return await response.json();
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return await res.json();
         } finally {
             this.isLoading = false;
             this.chatInput.disabled = false;
@@ -179,21 +186,17 @@ class ChatWidget {
         }
     }
 
-    sanitizeInput(input) {
-        return input.replace(/<script[^>]*?>[\s\S]*?<\/script>/gi, '').replace(/[<>]/g, '').trim();
+    sanitizeInput(str) {
+        return str.replace(/<script.*?>.*?<\/script>/gi, '').replace(/[<>]/g, '').trim();
     }
 
     addMessage(type, content) {
-        const message = {
-            type,
-            content,
-            timestamp: new Date().toISOString(),
-            id: Date.now() + Math.random()
-        };
-        this.messages.push(message);
-        this.renderMessage(message);
+        const msg = { type, content, timestamp: new Date().toISOString(), id: Date.now() + Math.random() };
+        this.messages.push(msg);
+        this.renderMessage(msg);
         this.saveMessages();
         this.scrollToBottom();
+
         if (!this.isOpen && type === 'bot') {
             this.unreadCount++;
             this.updateUnreadBadge();
@@ -202,20 +205,30 @@ class ChatWidget {
 
     renderMessages() {
         this.chatLog.innerHTML = '';
-        this.messages.forEach(msg => this.renderMessage(msg));
+        this.messages.forEach(m => this.renderMessage(m));
         this.scrollToBottom();
     }
 
-    renderMessage(msg) {
+    renderMessage(m) {
         const div = document.createElement('div');
-        div.className = `message ${msg.type}`;
-        div.innerHTML = `<div class="message-content">${msg.content}</div><div class="message-time">${this.formatTime(msg.timestamp)}</div>`;
+        div.className = `message ${m.type}`;
+        div.setAttribute('data-id', m.id);
+
+        const content = document.createElement('div');
+        content.className = 'message-content';
+        content.textContent = m.content;
+
+        const time = document.createElement('div');
+        time.className = 'message-time';
+        time.textContent = this.formatTime(m.timestamp);
+
+        div.appendChild(content);
+        div.appendChild(time);
         this.chatLog.appendChild(div);
     }
 
     formatTime(ts) {
-        const d = new Date(ts);
-        return d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+        return new Date(ts).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
     }
 
     showTyping() {
@@ -228,8 +241,12 @@ class ChatWidget {
     }
 
     updateUnreadBadge() {
-        this.unreadBadge.style.display = this.unreadCount > 0 ? 'flex' : 'none';
-        this.unreadBadge.textContent = this.unreadCount > 99 ? '99+' : this.unreadCount;
+        if (this.unreadCount > 0) {
+            this.unreadBadge.textContent = this.unreadCount > 99 ? '99+' : this.unreadCount;
+            this.unreadBadge.style.display = 'flex';
+        } else {
+            this.unreadBadge.style.display = 'none';
+        }
     }
 
     showError(msg) {
